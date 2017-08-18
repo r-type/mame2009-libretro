@@ -53,7 +53,7 @@ typedef void (*config_callback_func)(running_machine *machine, int config_type, 
  *
  *************************************/
 
-void config_init(running_machine *machine);
+void mconfig_init(running_machine *machine);
 void config_register(running_machine *machine, const char *nodename, config_callback_func load, config_callback_func save);
 int config_load_settings(running_machine *machine);
 void config_save_settings(running_machine *machine);

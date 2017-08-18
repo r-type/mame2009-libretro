@@ -92,6 +92,9 @@
 #include <time.h>
 
 
+extern void free_opt(void);
+extern void retro_execute(void);
+extern core_options *mame2_options(void);
 
 /***************************************************************************
     TYPE DEFINITIONS
@@ -244,21 +247,28 @@ INLINE void eat_all_cpu_cycles(running_machine *machine)
 /*-------------------------------------------------
     mame_execute - run the core emulation
 -------------------------------------------------*/
+static running_machine *retro_global_machine;
+static	mame_private *retro_global_mame;
+int ENDEXEC           = 0;
+extern int RLOOP;
+static int firstgame = TRUE;
+static int firstrun  = TRUE;
+extern int RETRO_FATAL_ERROR;
 
 int mame_execute(core_options *options)
 {
 	int exit_pending = FALSE;
 	int error = MAMERR_NONE;
-	int firstgame = TRUE;
-	int firstrun = TRUE;
+	//int firstgame = TRUE;
+	//int firstrun = TRUE;
 
 	/* loop across multiple hard resets */
 	while (error == MAMERR_NONE && !exit_pending)
 	{
 		const game_driver *driver;
-		running_machine *machine;
-		mame_private *mame;
-		callback_item *cb;
+		//running_machine *machine;
+		//mame_private *mame;
+		//callback_item *cb;
 		astring *gamename;
 
 		/* specify the mame_options */
@@ -287,49 +297,49 @@ int mame_execute(core_options *options)
 		mame_parse_ini_files(mame_options(), driver);
 
 		/* create the machine structure and driver */
-		machine = create_machine(driver);
-		mame = machine->mame_data;
+		retro_global_machine = create_machine(driver);
+		retro_global_mame = retro_global_machine->mame_data;
 
 		/* start in the "pre-init phase" */
-		mame->current_phase = MAME_PHASE_PREINIT;
+		retro_global_mame->current_phase = MAME_PHASE_PREINIT;
 
 		/* looooong term: remove this */
-		global_machine = machine;
+		global_machine = retro_global_machine;
 
 		init_resource_tracking();
 
 		/* use setjmp/longjmp for deep error recovery */
-		mame->fatal_error_jmpbuf_valid = TRUE;
-		error = setjmp(mame->fatal_error_jmpbuf);
+		retro_global_mame->fatal_error_jmpbuf_valid = TRUE;
+		error = setjmp(retro_global_mame->fatal_error_jmpbuf);
 		if (error == 0)
 		{
 			int settingsloaded;
 
 			/* move to the init phase */
-			mame->current_phase = MAME_PHASE_INIT;
+			retro_global_mame->current_phase = MAME_PHASE_INIT;
 
 			/* start tracking resources for real */
 			begin_resource_tracking();
 
 			/* if we have a logfile, set up the callback */
-			mame->logerror_callback_list = NULL;
+			retro_global_mame->logerror_callback_list = NULL;
 			if (options_get_bool(mame_options(), OPTION_LOG))
 			{
-				file_error filerr = mame_fopen(SEARCHPATH_DEBUGLOG, "error.log", OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &mame->logfile);
+				file_error filerr = mame_fopen(SEARCHPATH_DEBUGLOG, "error.log", OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &retro_global_mame->logfile);
 				assert_always(filerr == FILERR_NONE, "unable to open log file");
-				add_logerror_callback(machine, logfile_callback);
+				add_logerror_callback(retro_global_machine, logfile_callback);
 			}
 
 			/* then finish setting up our local machine */
-			init_machine(machine);
+			init_machine(retro_global_machine);
 
 			/* load the configuration settings and NVRAM */
-			settingsloaded = config_load_settings(machine);
-			nvram_load(machine);
-			sound_mute(machine, FALSE);
+			settingsloaded = config_load_settings(retro_global_machine);
+			nvram_load(retro_global_machine);
+			sound_mute(retro_global_machine, FALSE);
 
 			/* display the startup screens */
-			ui_display_startup_screens(machine, firstrun, !settingsloaded);
+			ui_display_startup_screens(retro_global_machine, firstrun, !settingsloaded);
 			firstrun = FALSE;
 
 			/* start resource tracking; note that soft_reset assumes it can */
@@ -338,12 +348,18 @@ int mame_execute(core_options *options)
 			begin_resource_tracking();
 
 			/* perform a soft reset -- this takes us to the running phase */
-			soft_reset(machine, NULL, 0);
+			soft_reset(retro_global_machine, NULL, 0);
 
 			/* run the CPUs until a reset or exit */
-			mame->hard_reset_pending = FALSE;
-			while ((!mame->hard_reset_pending && !mame->exit_pending) || mame->saveload_pending_file != NULL)
+			retro_global_mame->hard_reset_pending = FALSE;
+			while ((!retro_global_mame->hard_reset_pending && !retro_global_mame->exit_pending) || retro_global_mame->saveload_pending_file != NULL)
 			{
+
+return 0;
+			}
+		}
+	}
+#if 0
 				profiler_mark_start(PROFILER_EXTRA);
 
 				/* execute CPUs if not paused */
@@ -408,8 +424,154 @@ int mame_execute(core_options *options)
 
 	/* return an error */
 	return error;
+#endif
+return 0;
 }
 
+
+void free_machineconfig(void)
+{
+   destroy_machine(retro_global_machine);
+   global_machine = NULL;
+}
+
+void retro_loop(void)
+{
+   while (RLOOP==1)
+   {
+	/* execute CPUs if not paused */
+	if (!retro_global_mame->paused)
+		cpuexec_timeslice(retro_global_machine);
+
+	/* otherwise, just pump video updates through */
+	else
+		video_frame_update(retro_global_machine, FALSE);
+
+	/* handle save/load */
+	if (retro_global_mame->saveload_schedule_callback != NULL)
+		(*retro_global_mame->saveload_schedule_callback)(retro_global_machine);
+
+   }
+
+   if( (retro_global_mame->hard_reset_pending || retro_global_mame->exit_pending) && retro_global_mame->saveload_pending_file == NULL)
+   {
+
+	/* and out via the exit phase */
+	retro_global_mame->current_phase = MAME_PHASE_EXIT;
+
+	/* stop tracking resources at this level */
+	end_resource_tracking();
+
+	/* save the NVRAM and configuration */
+	sound_mute(retro_global_machine, TRUE);
+	nvram_save(retro_global_machine);
+	config_save_settings(retro_global_machine);
+
+//printf("RETRO hardrest/exit pending leave\n");
+      ENDEXEC=1;
+   }
+}
+
+void retro_main_loop(void)
+{
+	retro_loop();
+
+   if(ENDEXEC==1)
+   {
+//printf("RETRO ENDEXEC pending\n");
+	callback_item *cb;
+
+
+	retro_global_mame->fatal_error_jmpbuf_valid = FALSE;
+
+	/* call all exit callbacks registered */
+	for (cb = retro_global_mame->exit_callback_list; cb; cb = cb->next)
+		(*cb->func.exit)(retro_global_machine);
+
+	/* close all inner resource tracking */
+	exit_resource_tracking();
+
+	/* close the logfile */
+	if (retro_global_mame->logfile != NULL)
+		mame_fclose(retro_global_mame->logfile);
+
+	/* free our callback lists */
+	free_callback_list(&retro_global_mame->exit_callback_list);
+	free_callback_list(&retro_global_mame->pause_callback_list);
+	free_callback_list(&retro_global_mame->reset_callback_list);
+	free_callback_list(&retro_global_mame->frame_callback_list);
+
+	/* grab data from the MAME structure before it goes away */
+	if (retro_global_mame->new_driver_pending != NULL)
+	{
+		mame_opts = mame2_options();//retro_global_options;
+		options_set_string(mame_options(), OPTION_GAMENAME, retro_global_mame->new_driver_pending->name, OPTION_PRIORITY_CMDLINE);
+			firstrun = TRUE;
+	}
+
+	//exit_pending = retro_global_mame->exit_pending;
+
+	/* destroy the machine */
+	destroy_machine(retro_global_machine);
+
+	/* reset the options */
+	mame_opts = NULL;
+
+        ENDEXEC=0;
+
+        retro_execute();
+
+
+   }
+
+}
+
+
+void retro_machineexit(void)
+{
+//printf("RETRO retro_machineexit\n");
+    /* and out via the exit phase */
+    retro_global_mame->current_phase = MAME_PHASE_EXIT;
+
+    /* stop tracking resources at this level */
+    end_resource_tracking();
+
+    /* save the NVRAM and configuration */
+    sound_mute(retro_global_machine, TRUE);
+    nvram_save(retro_global_machine);
+    config_save_settings(retro_global_machine);
+
+    callback_item *cb;
+
+    retro_global_mame->fatal_error_jmpbuf_valid = FALSE;
+
+    /* call all exit callbacks registered */
+    for (cb = retro_global_mame->exit_callback_list; cb; cb = cb->next)
+	(*cb->func.exit)(retro_global_machine);
+
+    /* close all inner resource tracking */
+    exit_resource_tracking();
+
+    if (retro_global_mame->logfile != NULL)
+	mame_fclose(retro_global_mame->logfile);
+
+    /* free our callback lists */
+    free_callback_list(&retro_global_mame->exit_callback_list);
+    free_callback_list(&retro_global_mame->pause_callback_list);
+    free_callback_list(&retro_global_mame->reset_callback_list);
+    free_callback_list(&retro_global_mame->frame_callback_list);
+//printf("RETRO retro_machineexit leave\n");
+}
+
+
+void retro_finish(void)
+{
+//printf("RETRO finish\n");
+	retro_machineexit();
+	free_machineconfig();
+	free_opt();
+//printf("RETRO finish leave\n");
+}
 
 /*-------------------------------------------------
     mame_options - accesses the options for the
@@ -1134,6 +1296,8 @@ static void fatalerror_common(running_machine *machine, int exitcode, const char
 	/* break into the debugger if attached */
 	osd_break_into_debugger(giant_string_buffer);
 
+	RETRO_FATAL_ERROR=1;
+
 	/* longjmp back if we can; otherwise, exit */
 	if (machine != NULL && machine->mame_data != NULL && machine->mame_data->fatal_error_jmpbuf_valid)
   		longjmp(machine->mame_data->fatal_error_jmpbuf, exitcode);
@@ -1483,7 +1647,7 @@ static void init_machine(running_machine *machine)
 
 	/* initialize basic can't-fail systems here */
 	fileio_init(machine);
-	config_init(machine);
+	mconfig_init(machine);
 	input_init(machine);
 	output_init(machine);
 	state_init(machine);

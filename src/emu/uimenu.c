@@ -3486,6 +3486,7 @@ static void menu_select_game_populate(running_machine *machine, ui_menu *menu, s
 	/* update our driver list if necessary */
 	if (menustate->driverlist[0] == NULL)
 		menu_select_game_build_driver_list(menu, menustate);
+
 	for (curitem = matchcount = 0; menustate->driverlist[curitem] != NULL && matchcount < VISIBLE_GAMES_IN_LIST; curitem++)
 		if (!(menustate->driverlist[curitem]->flags & GAME_NO_STANDALONE))
 			matchcount++;
@@ -3567,6 +3568,7 @@ static void menu_select_game_build_driver_list(ui_menu *menu, select_game_state 
 
 	/* open a path to the ROMs and find them in the array */
 	path = mame_openpath(mame_options(), OPTION_ROMPATH);
+
 	if (path != NULL)
 	{
 		const osd_directory_entry *dir;

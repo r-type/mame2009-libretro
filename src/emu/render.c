@@ -552,6 +552,7 @@ void render_init(running_machine *machine)
 	/* zap the free lists */
 	render_primitive_free_list = NULL;
 	container_item_free_list = NULL;
+	render_texture_free_list = NULL;	//OLE: fixes neogeo exit crash
 
 	/* zap more variables */
 	ui_target = NULL;
@@ -611,9 +612,11 @@ static void render_exit(running_machine *machine)
 	}
 
 	/* remove all non-head entries from the texture free list */
-	for (texture_ptr = &render_texture_free_list; *texture_ptr != NULL; texture_ptr = &(*texture_ptr)->next)
-		while (*texture_ptr != NULL && (*texture_ptr)->base != *texture_ptr)
+	for (texture_ptr = &render_texture_free_list; *texture_ptr != NULL; texture_ptr = &(*texture_ptr)->next) {
+		while (*texture_ptr != NULL && (*texture_ptr)->base != *texture_ptr) {
 			*texture_ptr = (*texture_ptr)->next;
+		}
+	}
 
 	/* free the texture groups */
 	while (render_texture_free_list != NULL)
@@ -1242,9 +1245,9 @@ UINT32 render_target_get_view_screens(render_target *target, int viewindex)
 void render_target_get_bounds(render_target *target, INT32 *width, INT32 *height, float *pixel_aspect)
 {
 	if (width != NULL)
-		*width = target->width;
+		*width = !(target->base_orientation & ORIENTATION_SWAP_XY) ? target->width : target->height;//target->width;
 	if (height != NULL)
-		*height = target->height;
+		*height = !(target->base_orientation & ORIENTATION_SWAP_XY) ? target->height : target->width;//target->height;
 	if (pixel_aspect != NULL)
 		*pixel_aspect = target->pixel_aspect;
 }

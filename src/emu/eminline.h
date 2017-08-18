@@ -19,7 +19,11 @@
 #if defined(__i386__) || defined(__x86_64__)
 #include "eigccx86.h"
 #elif defined(__ppc__) || defined (__PPC__) || defined(__ppc64__) || defined(__PPC64__)
+#if defined(WIIU)
+#include "osinline.h"
+#else
 #include "eigccppc.h"
+#endif
 #else
 #include "osinline.h"
 #endif

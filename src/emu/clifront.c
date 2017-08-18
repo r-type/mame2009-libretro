@@ -98,7 +98,9 @@ static const options_entry cli_options[] =
 	{ NULL }
 };
 
-
+#ifdef __LIBRETRO__
+static core_options *retro_global_options;
+#endif
 
 /***************************************************************************
     CORE IMPLEMENTATION
@@ -167,7 +169,15 @@ int cli_execute(int argc, char **argv, const options_entry *osd_options)
 	}
 
 	/* run the game */
-	result = mame_execute(options);
+	retro_global_options=options;
+
+	result = mame_execute(retro_global_options);
+
+	astring_free(gamename);
+	astring_free(exename);
+return 0;
+
+//	result = mame_execute(options);
 
 error:
 	/* free our options and exit */
@@ -176,6 +186,22 @@ error:
 	astring_free(exename);
 	return result;
 }
+
+core_options *mame2_options(void)
+{
+	assert(retro_global_options != NULL);
+	return retro_global_options;
+}
+
+void retro_execute(void){
+   mame_execute(retro_global_options);
+}
+ 
+void free_opt(void){
+   if (retro_global_options != NULL)options_free(retro_global_options );
+   //dump_unfreed_mem();
+}
+
 
 
 /*-------------------------------------------------

@@ -81,6 +81,7 @@ machine_config *machine_config_alloc(const machine_config_token *tokens)
 }
 
 
+
 /*-------------------------------------------------
     machine_config_free - release memory allocated
     for a machine configuration

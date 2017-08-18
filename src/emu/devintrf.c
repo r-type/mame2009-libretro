@@ -197,8 +197,14 @@ device_config *device_list_add(device_list *devlist, const device_config *owner,
 
 	/* reset the inline_config to 0 */
 	if (configlen > 0)
+#ifdef OLEFIX
+	{
+		device->inline_config = malloc(configlen);
 		memset(device->inline_config, 0, configlen);
-
+	}
+#else
+		memset(device->inline_config, 0, configlen);
+#endif
 	/* fetch function pointers to the core functions */
 
 	/* before adding us to the global list, add us to the end of the type list */
@@ -256,7 +262,12 @@ void device_list_remove(device_list *devlist, const char *tag)
 	/* and from the map */
 	if (devlist->map != NULL)
 		tagmap_remove(devlist->map, device->tag);
-
+#ifdef OLEFIX
+	if (device->inline_config) {
+		//OLE: free the extra allocation we have made
+		free(device->inline_config);
+	}
+#endif
 	/* free the device object */
 	free(device);
 }
