@@ -214,6 +214,7 @@ void retro_reset (void)
 
 void retro_run (void)
 { 
+   int result;
    static int runfirst=1;
    bool updated = false;
 
